@@ -7,8 +7,8 @@ class CarbonateSystem(object):
     
     def __init__(self, salt, temp, pres=None, TC=None, TA=None, pH=None,
                  pCO2=None, fCO2=None, PO4=None, Si=None,
-                 K1K2="Millero2010", KBver="Uppstrom", KSver="Dickson",
-                 KFver="Dickson", TFver="Riley",pHscale=1):
+                 K1K2="Millero_2010", KBver="Uppstrom", KSver="Dickson",
+                 KFver="Dickson", TFver="Riley",pHScale=1):
 
         if TA is not None:
             TA   = TA   / 1e6 # micromol/kg to mol/kg
@@ -20,44 +20,47 @@ class CarbonateSystem(object):
             fCO2 = fCO2 / 1e6 # microatm. to atm.
         
         # Calculate relevent constants
-        if "roy_1993" in K1K2.lower():
-            cdict = constants.roy_1993(salt, temp, pres)
-        elif "goyet_poisson" in K1K2.lower():
-            cdict = constants.goyet_poisson_1989(salt, temp, pres)
-        elif "hansson_1973" in K1K2.lower():
-            cdict = constants.hansson_1973(salt, temp, pres)
-        elif "merbach_1973" in K1K2.lower():
-            cdict = constants.merbach_1973(salt, temp, pres)
-        elif "hansson_merbach" in K1K2.lower():
-            cdict = constants.hansson_merbach(salt, temp, pres)
-        elif "GEOSECS" in K1K2.lower():
-            cdict = constants.GEOSECS(salt, temp, pres)
-        elif "peng" in K1K2.lower():
-            cdict = constants.peng(salt, temp, pres)
-        elif "cai_wang_1998" in K1K2.lower():
-            cdict = constants.cai_wang_1998(salt, temp, pres)
-        elif "lueker_2000" in K1K2.lower():
-            cdict = constants.lueker_2000(salt, temp, pres)
-        elif "mojica_2002" in K1K2.lower():
-            cdict = constants.mojica_2002(salt, temp, pres)
-        elif "millero_1979" in K1K2.lower():
-            cdict = constants.millero_1979(salt, temp, pres)
-        elif "millero_1995" in K1K2.lower():
-            cdict = constants.millero_1995(salt, temp, pres)
-        elif "millero_consensus" in K1K2.lower():
-            cdict = constants.millero_consensus(salt, temp, pres)
-        elif "millero_2002" in K1K2.lower():
-            cdict = constants.millero_2002(salt, temp, pres)
-        elif "millero_2006" in K1K2.lower():
-            cdict = constants.millero_2006(salt, temp, pres)
-        elif "millero_2010" in K1K2.lower():
-            cdict = constants.millero_2010(salt, temp, pres)
-        elif "waters_2014" in K1K2.lower():
-            cdict = constants.waters_2014(salt, temp, pres)
-        else:
-            raise "K1K2 version incorrectly specified"
+        cdict = constants.generate_constants_dict(salt, temp, pres=pres,
+                KBver=KBver, KSver=KSver, KFver=KFver,TFver=TFver)
         
-        cdict=convert_pH_scale(cdict,pHscale)
+        if "roy_1993" in K1K2.lower():
+            cdict = constants.roy_1993(cdict, salt, temp, pres)
+        elif "goyet_poisson" in K1K2.lower():
+            cdict = constants.goyet_poisson_1989(cdict, salt, temp, pres)
+        elif "hansson_1973" in K1K2.lower():
+            cdict = constants.hansson_1973(cdict, salt, temp, pres)
+        elif "merbach_1973" in K1K2.lower():
+            cdict = constants.merbach_1973(cdict, salt, temp, pres)
+        elif "hansson_merbach" in K1K2.lower():
+            cdict = constants.hansson_merbach(cdict, salt, temp, pres)
+        elif "GEOSECS" in K1K2.lower():
+            cdict = constants.GEOSECS(cdict, salt, temp, pres)
+        elif "peng" in K1K2.lower():
+            cdict = constants.peng(cdict, salt, temp, pres)
+        elif "cai_wang_1998" in K1K2.lower():
+            cdict = constants.cai_wang_1998(cdict, salt, temp, pres)
+        elif "lueker_2000" in K1K2.lower():
+            cdict = constants.lueker_2000(cdict, salt, temp, pres)
+        elif "mojica_2002" in K1K2.lower():
+            cdict = constants.mojica_2002(cdict, salt, temp, pres)
+        elif "millero_1979" in K1K2.lower():
+            cdict = constants.millero_1979(cdict, salt, temp, pres)
+        elif "millero_1995" in K1K2.lower():
+            cdict = constants.millero_1995(cdict, salt, temp, pres)
+        elif "millero_consensus" in K1K2.lower():
+            cdict = constants.millero_consensus(cdict, salt, temp, pres)
+        elif "millero_2002" in K1K2.lower():
+            cdict = constants.millero_2002(cdict, salt, temp, pres)
+        elif "millero_2006" in K1K2.lower():
+            cdict = constants.millero_2006(cdict, salt, temp, pres)
+        elif "millero_2010" in K1K2.lower():
+            cdict = constants.millero_2010(cdict, salt, temp, pres)
+        elif "waters_2014" in K1K2.lower():
+            cdict = constants.waters_2014(cdict, salt, temp, pres)
+        else:
+            raise ValueError, "K1K2 version incorrectly specified"
+        
+        cdict=constants.convert_pH_scale(cdict,pHScale)
         
         for key in cdict:
             setattr(self, key, cdict[key])
@@ -177,9 +180,10 @@ class CarbonateSystem(object):
                                 Denom/Denom + BAlk*H / (self.KB + H) + OH + H)
             deltapH   = Residual / Slope # this is Newton's method
             # to keep the jump from being too big;
-            while np.any(np.abs(deltapH) > 1):
-                mask = np.abs(deltapH) > 1 
-                deltapH[mask] = deltapH[mask] / 2
+            if np.any(np.abs(deltapH) > 1):
+            #    mask = np.abs(deltapH) > 1 
+            #    deltapH[mask] = deltapH[mask] / 2
+                 deltapH=np.where(np.abs(deltapH) > 1, deltapH/2, deltapH)
             pH = pH + deltapH # Same scale as K1 and K2 were calculated.
         return pH
     

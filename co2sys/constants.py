@@ -107,8 +107,8 @@ def calculate_TB(salt, ver="Uppstrom"):
         return 0.0004157 * salt / 35 # in mol/kg-SW
     else:
 		# Lee, Kim, Byrne, Millero, Feely, Yong-Ming Liu. 2010.	
-	 	# Geochimica Et Cosmochimica Acta 74 (6): 1801?1811.
-		return 0.0004326 * salt / 35
+        # Geochimica Et Cosmochimica Acta 74 (6): 1801?1811.
+        return 0.0004326 * salt / 35
             
 def calculate_TF(salt,ver="Riley"):
     """Calculate Total Fluoride"""
@@ -136,7 +136,7 @@ def calculate_fH(salt, temp):
     fH = 1.2948 - 0.002036*tempK + (0.0004607 - 0.000001475*tempK) * salt**2
     return fH
 
-def calculate_KB(salt, temp, pres=None):
+def calculate_KB(salt, temp, pres=None, KSver="Dickson"):
     """Calculate KB
 
     Dickson, A. G., Deep-Sea Research 37:755-766, 1990:
@@ -320,9 +320,9 @@ def calculate_KW(salt, temp, pres=None):
         KW = KW * np.exp(lnKWfac)
     return KW
 
-def convert_pH_scale(cdict):
+def convert_pH_scale(cdict,pHScale=2):
     "Convert cdict to other pHscale"""
-    if pHscale==1: #Total
+    if pHScale==1: #Total
         pHfactor = cdict["SWStoTOT"]
     elif pHScale==2: #SWS, they are all on this now
         pHfactor = 1
@@ -330,6 +330,8 @@ def convert_pH_scale(cdict):
         pHfactor = cdict['SWStoTOT'] / cdict['FREEtoTOT']
     elif pHScale==4: #pHNBS
         pHfactor = fH
+    else:
+        raise ValueError, "pHScale incorrectly specified"
     for key in ["K1", "K2", "KW", "KB", "KP1", "KP2", "KP3", "KSi"]:
         cdict[key] = cdict[key] * pHfactor
     return cdict
@@ -395,22 +397,22 @@ def calculate_VPFac(salt, temp):
 def generate_constants_dict(salt, temp, pres=None,
                             KBver="Uppstrom", KSver="Dickson", KFver="Disckson",TFver="Riley"):
     """Agreegate all constants except K1 and K2 into one dictionary."""
-    cdict = {"KB"  : calculate_KB( salt, temp, pres           ),
-             "TB"  : calculate_TB( salt,             ver=KBver),
-             "TS"  : calculate_TS( salt                       ),
-             "TF"  : calculate_TF( salt,             ver=TFver),
-             "KF"  : calculate_KF( salt, temp, pres, ver=KFver),
-             "KS"  : calculate_KS( salt, temp, pres, ver=KSver),
-             "KW"  : calculate_KW( salt, temp, pres           ),
-             "KP1" : calculate_KP1(salt, temp, pres           ),
-             "KP2" : calculate_KP2(salt, temp, pres           ),
-             "KP3" : calculate_KP3(salt, temp, pres           ),
-             "KSi" : calculate_KSi(salt, temp, pres           ),
-             "K0"  : calculate_K0( salt, temp                 ),
+    cdict = {"KB"  : calculate_KB( salt, temp, pres, KSver=KSver),
+             "TB"  : calculate_TB( salt,               ver=KBver),
+             "TS"  : calculate_TS( salt                         ),
+             "TF"  : calculate_TF( salt,               ver=TFver),
+             "KF"  : calculate_KF( salt, temp, pres,   ver=KFver),
+             "KS"  : calculate_KS( salt, temp, pres,   ver=KSver),
+             "KW"  : calculate_KW( salt, temp, pres             ),
+             "KP1" : calculate_KP1(salt, temp, pres             ),
+             "KP2" : calculate_KP2(salt, temp, pres             ),
+             "KP3" : calculate_KP3(salt, temp, pres             ),
+             "KSi" : calculate_KSi(salt, temp, pres             ),
+             "K0"  : calculate_K0( salt, temp                   ),
              "K1"  : salt * np.nan,
              "K2"  : salt * np.nan,
              "FugFac"    : calculate_fugfac(temp),
-             "SWStoTOT"  : calculate_SWStoTOT(salt, temp, pres, KSver=KSver),
+             "SWStoTOT"  : calculate_SWStoTOT (salt, temp, pres, KSver=KSver),
              "FREEtoTOT" : calculate_FREEtoTOT(salt, temp, pres, KSver=KSver)
              }
     return cdict
@@ -422,7 +424,7 @@ def calculate_K0(salt, temp):
             salt * (0.023517 - 0.023656*TempK100 + 0.0047036*TempK100**2))
     return np.exp(lnK0) # mol/kg-SW/atm
 
-def roy_1993(salt, temp, pres=None):
+def roy_1993(cdict, salt, temp, pres=None):
     """   1 = Roy, 1993											
     T:    0-45  S:  5-45. Total scale. Artificial seawater.
     
@@ -438,26 +440,25 @@ def roy_1993(salt, temp, pres=None):
     in pK2. This would be a 2s precision of about 2# in K1 and 1.5# in K2.
     T:  0-45  S:  5-45. Total Scale. Artificial sewater.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK    = calc_tempK(temp)
     logTempK = logTempK(temp)
     #Eq. 29, p. 254 + abs
     lnK1 = (2.83655 - 2307.1266 / TempK - 1.5529413 * logTempK(temp) +
             (-0.20760841 - 4.0484 / TempK) * np.sqrt(salt) + 0.08468345*salt -
             0.00654208 * np.sqrt(salt) * salt)
-    K1 = np.exp(lnK1) * (1 - 0.001005*salt) / calculate_SWStoTOT(salt, temp, KSver=KSver)
+    K1 = np.exp(lnK1) * (1 - 0.001005*salt) / cdict['SWStoTOT']
     #Eq. 30, p. 254 + abs
     lnK2 = (-9.226508 - 3351.6106/-0.2005743 * logTempK +
             (-0.106901773 - 23.9722/TempK) * np.sqrt(salt) +
             0.1130822 * salt - 0.00846934 * np.sqrt(salt) * salt)
-    K2 = np.exp(lnK2) * (1 - 0.001005*salt) / calculate_SWStoTOT(salt, temp, KSver=KSver)
+    K2 = np.exp(lnK2) * (1 - 0.001005*salt) / cdict['SWStoTOT']
     if pres is not None:
         K1,K2 = calculate_press_effects_on_K1_K2(K1, K2, temp, pres)
     cdict['K1'] = K1
     cdict['K2'] = K2
     return cdict
 
-def goyet_poisson_1989(salt, temp, pres=None):
+def goyet_poisson_1989(cdict, salt, temp, pres=None):
     """2 = Goyet & Poisson										
     T:   -1-40  S: 10-50. Seaw. scale. Artificial seawater.
 
@@ -465,7 +466,6 @@ def goyet_poisson_1989(salt, temp, pres=None):
     The 2s precision in pK1 is .011, or 2.5# in K1.
     The 2s precision in pK2 is .02, or 4.5# in K2.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     #Table 5 p. 1652 and what they use in the abstract:
     pK1 = (812.270 / tempK + 3.356 - 0.00171 * salt * np.log(tempK) +
@@ -481,7 +481,7 @@ def goyet_poisson_1989(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def hansson_1973(salt, temp, pres=None):
+def hansson_1973(cdict, salt, temp, pres=None):
     """3 = HANSSON refit BY DICKSON AND MILLERO	
     T:    2-35  S: 20-40. Seaw. scale. Artificial seawater.
 
@@ -498,7 +498,6 @@ def hansson_1973(salt, temp, pres=None):
     The 2s precision in pK1 is .013, or 3# in K1.
     The 2s precision in pK2 is .017, or 4.1# in K2.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logTempK = logTempK(temp)
     #Table 4 on p. 1739.
@@ -514,7 +513,7 @@ def hansson_1973(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def merbach_1973(salt, temp, pres=None):
+def merbach_1973(cdict, salt, temp, pres=None):
     """4 = MEHRBACH             refit BY DICKSON AND MILLERO	
     temp: 2-35, salt: 20-40. Seaw. scale. Artificial seawater.
     
@@ -527,7 +526,6 @@ def merbach_1973(salt, temp, pres=None):
     The 2s precision in pK2 is .020, or 4.6# in K2.
 	Valid for salinity 20-40.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     # Table 4 on p. 1739.
     pK1 = (3670.7 / tempK - 62.008 + 9.7944 * np.log(tempK) -
@@ -542,7 +540,7 @@ def merbach_1973(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def hansson_merbach(salt, temp, pres=None):
+def hansson_merbach(cdict, salt, temp, pres=None):
     """5 = HANSSON and MEHRBACH refit BY DICKSON AND MILLERO	
     T:    2-35  S: 20-40. Seaw. scale. Artificial seawater.
 
@@ -558,7 +556,6 @@ def hansson_merbach(salt, temp, pres=None):
     The 2s precision in pK2 is .026, or 6# in K2.
 	Valid for salinity 20-40.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     # tbl 5, p. 1740.
     pK1 = 845 / tempK + 3.248 - 0.0098 * salt + 0.000087 * salt**2
@@ -572,7 +569,7 @@ def hansson_merbach(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def GEOSECS(salt, temp, pres=None):
+def GEOSECS(cdict, salt, temp, pres=None):
     """6 = GEOSECS (i.e., original Mehrbach)				
 	T:    2-35  S: 19-43. NBS scale.   Real seawater.
 
@@ -598,7 +595,6 @@ def GEOSECS(salt, temp, pres=None):
 
     # pK2 is not defined for Sal=0, since log10(0)=-inf
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logKB = -9.26 + 0.00886 * salt + 0.01 * temp
     KB  = 10**(logKB) / fH # SWS scale
@@ -634,7 +630,7 @@ def GEOSECS(salt, temp, pres=None):
     if pres is not None:
         pass
                 
-def peng(salt, temp, pres=None):
+def peng(cdict, salt, temp, pres=None):
     """7 = Peng	(i.e., original Mehrbach but without XXX)	
     T:    2-35  S: 19-43. NBS scale.   Real seawater.
 
@@ -659,7 +655,6 @@ def peng(salt, temp, pres=None):
     The 2s precision in pK2 is .008, or 2# in K2.
     pK2 is not defined for Sal=0, since log10(0)=-inf
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logTempK = np.log(tempK)
     
@@ -733,7 +728,6 @@ def cai_wang_1998():
 	Their check values for F1 don't work out, not sure if this was correctly 
     published...
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     F1  = 200.1 / tempK + 0.3220
     pK1 = (3404.71 / tempK + 0.032786 * tempK - 14.8435 -
@@ -749,7 +743,7 @@ def cai_wang_1998():
     cdict['K2'] = K2
     return cdict
 
-def lueker_2000(salt, temp, pres=None):
+def lueker_2000(cdict, salt, temp, pres=None):
     """10 = Lueker et al, 2000									
     T:    2-35  S: 19-43. Total scale. Real seawater.
 
@@ -759,21 +753,20 @@ def lueker_2000(salt, temp, pres=None):
     Mar. Chem. 70 (2000) 105-119
     Total scale and kg-sw
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     pK1 = (3633.86 / tempK - 61.2172 + 9.67770 * np.log(tempK) -
            0.011555 * salt + 0.0001152 * salt**2)
-    K1  = 10**-pK1 / calculate_SWStoTOT(salt, temp, KSver=KSver) # SWS pH scale
+    K1  = 10**-pK1 / cdict['SWStoTOT'] # SWS pH scale
     pK2 = (471.780 / tempK + 25.929  - 3.16967 * np.log(tempK) -
            0.017810 * salt + 0.0001122 * salt**2)
-    K2  = 10**-pK2 / calculate_SWStoTOT(salt, temp, KSver=KSver) # SWS pH scale
+    K2  = 10**-pK2 / cdict['SWStoTOT'] # SWS pH scale
     if pres is not None:
         K1,K2 = calculate_press_effects_on_K1_K2(K1, K2, temp, pres)
     cdict['K1'] = K1
     cdict['K2'] = K2
     return cdict
 
-def mojica_2002(salt, temp, pres=None):
+def mojica_2002(cdict, salt, temp, pres=None):
     """11 = Mojica Prieto and Millero, 2002.					
     T:    0-45  S:  5-42. Seaw. scale. Real seawater
 
@@ -782,7 +775,6 @@ def mojica_2002(salt, temp, pres=None):
 	sigma for pK1 is reported to be 0.0056
 	sigma for pK2 is reported to be 0.010
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     pK1 = (-43.6977 - 0.01290370 * salt + 1.364e-4 * salt**2 +
            2885.378 / tempK +  7.045159 * np.log(tempK))
@@ -798,7 +790,7 @@ def mojica_2002(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def millero_1979(salt, temp, pres=None):
+def millero_1979(cdict, salt, temp, pres=None):
     """ 8 = Millero, 1979, FOR PURE WATER ONLY (i.e., Sal=0)	
     T:    0-50  S:     0. 
 
@@ -817,7 +809,6 @@ def millero_1979(salt, temp, pres=None):
     refit data of Harned and Owen, The Physical Chemistry of
     Electrolyte Solutions, 1958
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     cdict = {"TB" : 0, "KB" : 0, "KP1" : 0, "KP2" : 0, "KP3" : 0, "KSi" : 0,
              "fH" : 1, "KB2" : 0}
@@ -843,14 +834,13 @@ def millero_1979(salt, temp, pres=None):
         lnKWfac = (-deltaV + 0.5 * Kappa * Pbar) * Pbar / RT(temp)
         KW = KW * np.exp(lnKWfac)
 
-def millero_1995(salt, temp, pres=None):
+def millero_1995(cdict, salt, temp, pres=None):
     """Millero (1995, eq 35 and 36);									
     T: -1.6-35  S: 34-37. Seaw. scale. Field measurements.
 
 	Mehrbach et al. (1973) data
     Seawater pH scale
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logTempK = np.log(tempK)
     pK1 =  3670.7 / tempK - 62.008 + 9.7944 * logTempK - 0.0118 * salt + 0.000116 * salt**2
@@ -863,12 +853,11 @@ def millero_1995(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def millero_consensus(salt, temp, pres=None):
+def millero_consensus(cdict, salt, temp, pres=None):
     """Millero (1995, eq 50 and 51);									
     Millero's consensus or combination coefficients
     Seawater pH scale
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logTempK = np.log(tempK)
     lnK1 =  2.18867 - 2275.0360 / tempK - 1.468591 * logTempK 
@@ -883,7 +872,7 @@ def millero_consensus(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def millero_2002(salt, temp, pres=None):
+def millero_2002(cdict, salt, temp, pres=None):
     """12 = Millero et al, 2002									
     T: -1.6-35  S: 34-37. Seaw. scale. Field measurements.
 
@@ -893,7 +882,6 @@ def millero_2002(salt, temp, pres=None):
 	sigma for pK2 is reported to be 0.008
     """
 	# Page 1715
-    cdict = generate_constants_dict(salt, temp, pres)
     pK1 =  6.359 - 0.00664 * salt - 0.01322 * temp + 4.989e-5 * temp**2
     pK2 =  9.867 - 0.01314 * salt - 0.01904 * temp + 2.448e-5 * temp**2
     K1 = 10**-pK1 # SWS pH scale in mol/kg-SW
@@ -904,7 +892,7 @@ def millero_2002(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def millero_2006(salt, temp, pres=None):
+def millero_2006(cdict, salt, temp, pres=None):
     """13 = Millero et al, 2006									
     T:    0-50  S:  1-50. Seaw. scale. Real seawater.
 
@@ -914,7 +902,6 @@ def millero_2006(salt, temp, pres=None):
     S=1 to 50, T=0 to 50. On seawater scale (SWS).
     From titrations in Gulf Stream seawater.
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     pK1_0 = -126.34048 + 6320.813/tempK + 19.568224*np.log(tempK)
     A_1   = 13.4191 * salt**0.5 + 0.0331 * salt - 5.33e-5 * salt**2
@@ -934,7 +921,7 @@ def millero_2006(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def millero_2010(salt, temp, pres=None):
+def millero_2010(cdict, salt, temp, pres=None):
     """14 = Millero et al, 2010									
     T:    0-50  S:  1-50. Seaw. scale. Real seawater.
 
@@ -945,7 +932,6 @@ def millero_2010(salt, temp, pres=None):
     Millero et al. (2006)
 	# Constants for K's on the SWS;
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
 	# Page 141
     pK10 = -126.34048 + 6320.813 / tempK + 19.568224 * np.log(tempK)
@@ -969,13 +955,12 @@ def millero_2010(salt, temp, pres=None):
     cdict['K2'] = K2
     return cdict
 
-def waters_2014(salt, temp, pres=None):
+def waters_2014(cdict, salt, temp, pres=None):
     """Waters, Millero, Woosley (Mar. Chem., 165, 66-67, 2014)								
     Suitable when 0 < T < 50 and 1 < S < 50. Seaw. scale. Real seawater.
 
 	# Constants for K's on the SWS;
     """
-    cdict = generate_constants_dict(salt, temp, pres)
     tempK = calc_tempK(temp)
     logTempK = np.log(tempK)
     pK1 = 6320.813 / tempK + 19.568224 * logTempK - 126.34048 + 13.409160 * salt**0.5 + 0.031646 * salt - 5.1895e-5 * salt**2
