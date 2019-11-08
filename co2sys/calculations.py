@@ -162,7 +162,7 @@ class CarbonateSystem(object):
         pHTol   = 0.0001     # tolerance for iterations end
         ln10    = np.log(10)
         deltapH = pHTol + 1
-        while np.any(abs(deltapH) > pHTol):
+        while np.any(np.greater(np.abs(deltapH),pHTol,where=~np.isnan(deltapH))):
             H         = 10**(-pH)
             Denom     = (H*H + self.K1*H + self.K1*self.K2)
             CAlk      = TC*self.K1 * (H + 2*self.K2) / Denom
@@ -180,10 +180,11 @@ class CarbonateSystem(object):
                                 Denom/Denom + BAlk*H / (self.KB + H) + OH + H)
             deltapH   = Residual / Slope # this is Newton's method
             # to keep the jump from being too big;
-            if np.any(np.abs(deltapH) > 1):
+            if np.any(np.greater(np.abs(deltapH),1.0,where=~np.isnan(deltapH))):
             #    mask = np.abs(deltapH) > 1 
             #    deltapH[mask] = deltapH[mask] / 2
-                 deltapH=np.where(np.abs(deltapH) > 1, deltapH/2, deltapH)
+                 deltapH=np.where(np.greater(np.abs(deltapH),1.0,where=~np.isnan(deltapH)),
+                                  deltapH/2, deltapH)
             pH = pH + deltapH # Same scale as K1 and K2 were calculated.
         return pH
     
@@ -225,7 +226,7 @@ class CarbonateSystem(object):
         pHTol  = 0.0001     # tolerance
         ln10   = np.log(10)
         deltapH = pHTol + pH
-        while np.any(np.abs(deltapH) > pHTol):
+        while np.any(np.greater(np.abs(deltapH),pHTol,where=~np.isnan(deltapH))):
             H         = 10**(-pH)
             HCO3      = self.K0 * self.K1 * fCO2 / H
             CO3       = self.K0 * self.K1 * self.K2 * fCO2 / (H*H)
@@ -243,9 +244,12 @@ class CarbonateSystem(object):
             deltapH   = Residual / Slope
 
             # Newton's method to keep the jump from being too big:
-            while np.any(np.abs(deltapH) > 1):
-                mask = np.abs(deltapH) > 1 
-                deltapH[mask] = deltapH[mask] / 2
+            if np.any(np.greater(np.abs(deltapH),1.0,where=~np.isnan(deltapH))):
+            #    mask = np.abs(deltapH) > 1 
+            #    deltapH[mask] = deltapH[mask] / 2
+                 deltapH=np.where(
+                     np.greater(np.abs(deltapH),1.0,where=~np.isnan(deltapH)), 
+                     deltapH/2, deltapH)
             pH = pH + deltapH # Same scale as K1 and K2 were calculated.
         return pH
 
