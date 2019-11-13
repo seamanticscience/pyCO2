@@ -350,7 +350,7 @@ def calculate_FREEtoTOT(salt, temp, pres=None, KSver="Dickson"):
     KS = calculate_KS(salt, temp, pres=pres, ver=KSver)
     return 1 + TS / KS
 
-def calculate_fugfac(temp):
+def calculate_fugfac(temp, pres=None):
     """Calculate Fugacity Constants
     
     This assumes that the pressure is at one atmosphere, or close to it.
@@ -364,8 +364,10 @@ def calculate_fugfac(temp):
     Delta = (57.7 - 0.118 * tempK)
     b = (-1636.75 + 12.0408 * tempK - 0.0327957 * tempK**2 +
          3.16528  * 0.00001 * tempK**3)
-    P1atm = 1.01325 # in bar
-    return np.exp((b + 2 * Delta) * P1atm / RT(temp))
+    Patm = 1.01325 # in bar
+#    if pres is not None:
+#        Patm=Patm+(pres/10)      
+    return np.exp((b + 2 * Delta) * Patm / RT(temp))
 
 def calculate_VPFac(salt, temp):
     """Calculate VPFac
@@ -411,7 +413,7 @@ def generate_constants_dict(salt, temp, pres=None,
              "K0"  : calculate_K0( salt, temp                   ),
              "K1"  : salt * np.nan,
              "K2"  : salt * np.nan,
-             "FugFac"    : calculate_fugfac(temp),
+             "FugFac"    : calculate_fugfac(temp, pres),
              "SWStoTOT"  : calculate_SWStoTOT (salt, temp, pres, KSver=KSver),
              "FREEtoTOT" : calculate_FREEtoTOT(salt, temp, pres, KSver=KSver)
              }
@@ -695,11 +697,11 @@ def peng(cdict, salt, temp, pres=None):
     # who in turn quote Li, personal communication
     if pres is not None:
         Pbar = pres / 10
-        lnK1fac = (24.2 - 0.085 * tempC) * Pbar / RT(temp)
-        lnK2fac = (16.4 - 0.04  * tempC) * Pbar / RT(temp)
+        lnK1fac = (24.2 - 0.085 * temp) * Pbar / RT(temp)
+        lnK2fac = (16.4 - 0.04  * temp) * Pbar / RT(temp)
         # Takahashi et al had 26.4, but 16.4 is from Edmond and Gieskes
         # and matches the GEOSECS results
-        lnKBfac = (27.5 - 0.095 * tempC) * Pbar / RT(temp)
+        lnKBfac = (27.5 - 0.095 * temp) * Pbar / RT(temp)
         # GEOSECS and Peng assume pCO2 = fCO2, or FugFac = 1
         FugFac = 1;
 
@@ -835,20 +837,24 @@ def millero_1979(cdict, salt, temp, pres=None):
         KW = KW * np.exp(lnKWfac)
 
 def millero_1995(cdict, salt, temp, pres=None):
-    """Millero (1995, eq 35 and 36);									
+    """As used in MITgcm carbon_chem.F
+    Millero (1995, eq 35 and 36);									
     T: -1.6-35  S: 34-37. Seaw. scale. Field measurements.
 
 	Mehrbach et al. (1973) data
     Seawater pH scale
     """
     tempK = calc_tempK(temp)
-    logTempK = np.log(tempK)
-    pK1 =  3670.7 / tempK - 62.008 + 9.7944 * logTempK - 0.0118 * salt + 0.000116 * salt**2
-    pK2 =  1394.7 / tempK + 4.777 - 0.0184 * salt + 0.000118 * salt**2
+    pK1 =  3670.7 / tempK - 62.008 + 9.7944 * np.log(tempK) - 0.0118 * salt + 0.000116 * salt**2
     K1 = 10**-pK1 # SWS pH scale in mol/kg-SW
+    pK2 =  1394.7 / tempK + 4.777 - 0.0184 * salt + 0.000118 * salt**2
     K2 = 10**-pK2 # SWS pH scale in mol/kg-SW
     if pres is not None:
-        K1,K2 = calculate_press_effects_on_K1_K2(K1, K2, temp, pres)
+        pBar=pres/10
+        lnK1fac=(24.2-0.085*temp)*(pBar-1.0)/RT(temp)
+        K1 = K1 * np.exp(lnK1fac)
+        lnK2fac=(16.4-0.040*temp)*(pBar-1.0)/RT(temp)
+        K2 = K2 * np.exp(lnK2fac)
     cdict['K1'] = K1
     cdict['K2'] = K2
     return cdict
