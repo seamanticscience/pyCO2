@@ -332,7 +332,7 @@ def convert_pH_scale(cdict,pHScale=2):
     elif pHScale==3: #pHfree
         pHfactor = cdict['SWStoTOT'] / cdict['FREEtoTOT']
     elif pHScale==4: #pHNBS
-        pHfactor = fH
+        pHfactor = cdict['NBStoSWS']
     else:
         raise ValueError, "pHScale incorrectly specified"
     for key in ["K1", "K2", "KW", "KB", "KP1", "KP2", "KP3", "KSi"]:
@@ -418,7 +418,8 @@ def generate_constants_dict(salt, temp, pres=None,
              "K2"  : salt * np.nan,
              "FugFac"    : calculate_fugfac(temp, pres),
              "SWStoTOT"  : calculate_SWStoTOT (salt, temp, pres, KSver=KSver),
-             "FREEtoTOT" : calculate_FREEtoTOT(salt, temp, pres, KSver=KSver)
+             "FREEtoTOT" : calculate_FREEtoTOT(salt, temp, pres, KSver=KSver),
+             "NBStoSWS"  : 1/calculate_fH(salt, temp)
              }
     return cdict
 
@@ -602,7 +603,7 @@ def GEOSECS(cdict, salt, temp, pres=None):
     """
     tempK = calc_tempK(temp)
     logKB = -9.26 + 0.00886 * salt + 0.01 * temp
-    KB  = 10**(logKB) / fH # SWS scale
+    KB  = 10**(logKB) * cdict['NBStoSWS'] # SWS scale
     TB  = 0.0004106 * salt / 35. # mol/kg-SW
     KW  = 0     # GEOSECS doesn't include OH effects
     KP1 = 0
@@ -612,12 +613,12 @@ def GEOSECS(cdict, salt, temp, pres=None):
 
     pK1 = (- 13.7201 + 0.031334 * tempK + 3235.76 / tempK +
            1.3e-5 * salt * tempK - 0.1032 * salt**0.5)
-    K1 = 10.**(-pK1) / fH # SWS scale
+    K1 = 10.**(-pK1) * cdict['NBStoSWS'] # SWS scale
     pK2 = (5371.9645 + 1.671221 * tempK + 0.22913 * salt +
            18.3802 * np.log10(salt) - 128375.28 / tempK -
            2194.3055 * np.log10(tempK) - 8.0944e-4 * salt * tempK -
            5617.11 * np.log10(salt) / tempK + 2.136 * salt / tempK)
-    K2 = 10.**(-pK2) /fH # SWS scale
+    K2 = 10.**(-pK2) * cdict['NBStoSWS'] # SWS scale
 
     #GEOSECS Pressure Effects On K1, K2, KB (on the NBS scale)
     #Takahashi et al, GEOSECS Pacific Expedition v. 3, 1982 quotes
@@ -717,7 +718,7 @@ def peng(cdict, salt, temp, pres=None):
     end
     """
     
-def cai_wang_1998():
+def cai_wang_1998(cdict, salt, temp, pres=None):
     """9 = Cai and Wang, 1998									
     T:    2-35  S:  0-49. NBS scale.   Real and artificial seawater.
 
@@ -737,11 +738,11 @@ def cai_wang_1998():
     F1  = 200.1 / tempK + 0.3220
     pK1 = (3404.71 / tempK + 0.032786 * tempK - 14.8435 -
            0.071692 * F1 * salt**0.5 + 0.0021487 * salt)
-    K1  = 10**-pK1 / fH # SWS scale (uncertain at low Sal: junction potential)
+    K1  = 10**-pK1 * cdict['NBStoSWS'] # SWS scale (uncertain at low Sal: junction potential)
     F2  = -129.24 / tempK + 1.4381
     pK2 = (2902.39 / tempK + 0.023790 * tempK - 6.49800 -
            0.319100 * F2 * salt**0.5 + 0.0198000 * salt)
-    K2  = 10**-pK2 / fH # SWS scale (uncertain at low Sal: junction potential)
+    K2  = 10**-pK2 * cdict['NBStoSWS'] # SWS scale (uncertain at low Sal: junction potential)
     if pres is not None:
         K1,K2 = calculate_press_effects_on_K1_K2(K1, K2, temp, pres)
     cdict['K1'] = K1
