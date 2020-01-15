@@ -101,6 +101,9 @@ def calculate_IonS(salt):
     """DOE handbook, Chapter 5, p. 13/22, eq. 7.2.4"""
     return 19.924 * salt / (1000 - 1.005 * salt)
 
+def calculate_zds(salt,saltanom=34.8):
+    return salt - saltanom
+
 def calculate_TB(salt, ver="Uppstrom"):
     """ Calculate Total Borate """
     if "upp" in ver.lower():
@@ -176,7 +179,7 @@ def calculate_KF(salt, temp, pres=None,ver="Dickson"):
         It is assumed that KF is on the free pH scale.
         """
         # exp(lnKF) is on the free pH scale in mol/kg-H2O
-        lnKF = 1590.2/calc_tempK(temp) - 12.641 + 1.525 * calculate_IonS(salt)**0.5
+        lnKF = 1590.2/calc_tempK(temp) - 12.641 + 1.525 * np.sqrt(calculate_IonS(salt))
         KF = np.exp(lnKF) * (1 - 0.001005 * salt) # mol/kg-SW
     elif "perez" in ver.lower():
         """Perez and Fraga 1987. 
@@ -285,7 +288,7 @@ def calculate_KS(salt, temp, pres=None, ver="Dickson"):
     IonS = calculate_IonS(salt)
     if "dick" in ver.lower():
         lnKS = (-4276.1/tempK + 141.328 - 23.0930*np.log(tempK) +            
-                (-13856/tempK + 324.57  - 47.9860*np.log(tempK)) * IonS**0.5 +
+                (-13856/tempK + 324.57  - 47.9860*np.log(tempK)) * np.sqrt(IonS)+
                 (35474./tempK - 771.54  + 114.723*np.log(tempK)) * IonS +
                 (-2698./tempK) * np.sqrt(IonS) * IonS + (1776/tempK) * IonS**2) 
         KS   = np.exp(lnKS) * (1 - 0.001005 * salt)  # mol/kg-SW
@@ -827,8 +830,8 @@ def millero_1979(cdict, salt, temp, pres=None):
         Kappa   = (-6.22 + 0.1368 * temp - 0.001233  * temp**2) / 1000
         lnK1fac = (-deltaV + 0.5 * Kappa * Pbar) * Pbar / RT(temp)
         K1 = K1 * np.exp(lnK1fac)
-        deltaV  = -29.81 + 0.115 * temp - 0.001816 * Temp**2
-        Kappa   = (-5.74 + 0.093 * temp - 0.001896 * Temp**2) / 1000
+        deltaV  = -29.81 + 0.115 * temp - 0.001816 * temp**2
+        Kappa   = (-5.74 + 0.093 * temp - 0.001896 * temp**2) / 1000
         lnK2fac = (-deltaV + 0.5 * Kappa * Pbar) * Pbar / RT(temp)
         K2 = K2 * np.exp(lnK2fac)
         deltaV  =  -25.6 + 0.2324 * temp - 0.0036246 * temp**2;
@@ -850,10 +853,17 @@ def millero_1995(cdict, salt, temp, pres=None):
     pK2 =  1394.7 / tempK + 4.777 - 0.0184 * salt + 0.000118 * salt**2
     K2 = 10**-pK2 # SWS pH scale in mol/kg-SW
     if pres is not None:
-        pBar=pres/10
-        lnK1fac=(24.2-0.085*temp)*(pBar-1.0)/RT(temp)
+        zds=calculate_zds(salt)
+        Pbar=pres/10
+#        lnK1fac=(24.2-0.085*temp)*(pBar-1.0)/RT(temp)
+        deltaV =  -25.50 - 0.151 * zds + 0.1271 * temp
+        Kappa  = (-3.08 - 0.578 * zds + 0.0877 * temp) / 1000
+        lnK1fac= (-deltaV + 0.5 * Kappa * Pbar) * Pbar / RT(temp)
         K1 = K1 * np.exp(lnK1fac)
-        lnK2fac=(16.4-0.040*temp)*(pBar-1.0)/RT(temp)
+#        lnK2fac=(16.4-0.040*temp)*(pBar-1.0)/RT(temp)
+        deltaV = -15.82 + 0.321 * zds - 0.0219 * temp
+        Kappa  = ( 1.13 - 0.314 * zds - 0.1475 * temp) / 1000
+        lnK2fac= (-deltaV + 0.5 * Kappa * Pbar) * Pbar / RT(temp)
         K2 = K2 * np.exp(lnK2fac)
     cdict['K1'] = K1
     cdict['K2'] = K2
